@@ -112,5 +112,35 @@ class VentanaLogin(tk.Tk):
                 self.destroy(); VentanaPrincipal(u).mainloop(); return
         self.lbl_e.config(text="Credenciales incorrectas")
 
+# ─── Ventana Principal ────────────────────────────────────────────────────────
+class VentanaPrincipal(tk.Tk):
+    def __init__(self, usuario):
+        super().__init__(); self.usuario=usuario
+        self.title("BUS SYSTEM PRO"); self.geometry("1100x680"); self.configure(bg=BG)
+        self._sidebar(); self._mostrar("venta")
+    def _sidebar(self):
+        sb=tk.Frame(self,bg=SIDEBAR,width=200); sb.pack(side="left",fill="y"); sb.pack_propagate(False)
+        tk.Label(sb,text="BUS SYSTEM PRO",font=("Segoe UI",11,"bold"),bg=SIDEBAR,fg=TEXT).pack(pady=(20,2))
+        tk.Label(sb,text=f"Hola, {self.usuario['usuario']}",bg=SIDEBAR,fg=SUBTEXT,
+                 font=("Segoe UI",8)).pack(pady=(0,15))
+        self.area=tk.Frame(self,bg=BG); self.area.pack(side="left",fill="both",expand=True)
+        for clave,texto in [("venta","Vender Pasaje"),("pasajeros","Pasajeros"),
+                             ("rutas","Rutas"),("reporte","Reportes")]:
+            tk.Button(sb,text=texto,font=("Segoe UI",10),bg=SIDEBAR,fg=TEXT,bd=0,
+                      anchor="w",padx=15,pady=10,cursor="hand2",
+                      command=lambda c=clave:self._mostrar(c)).pack(fill="x")
+        # Boton cerrar sesion al fondo
+        tk.Frame(sb,bg=BORDER,height=1).pack(fill="x",pady=(20,0))
+        tk.Button(sb,text="Cerrar sesion",font=("Segoe UI",10),bg=SIDEBAR,fg=DANGER,bd=0,
+                  anchor="w",padx=15,pady=10,cursor="hand2",
+                  command=self._cerrar_sesion).pack(fill="x",side="bottom")
+    def _mostrar(self,clave):
+        for w in self.area.winfo_children(): w.destroy()
+        {"venta":VistaVenta,"pasajeros":VistaPasajeros,
+         "rutas":VistaRutas,"reporte":VistaReporte}[clave](self.area,self.usuario).pack(fill="both",expand=True)
+    def _cerrar_sesion(self):
+        if messagebox.askyesno("Cerrar sesion","¿Deseas cerrar sesion?"):
+            self.destroy(); VentanaLogin().mainloop()
+
 if __name__ == "__main__":
     VentanaLogin().mainloop()
