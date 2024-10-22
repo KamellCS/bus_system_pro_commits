@@ -142,5 +142,201 @@ class VentanaPrincipal(tk.Tk):
         if messagebox.askyesno("Cerrar sesion","¿Deseas cerrar sesion?"):
             self.destroy(); VentanaLogin().mainloop()
 
+# ─── Boleta ───────────────────────────────────────────────────────────────────
+class VentanaBoleta(tk.Toplevel):
+    def __init__(self, parent, pasajero):
+        super().__init__(parent)
+        self.title("Boleta de Pasaje"); self.geometry("420x520")
+        self.resizable(False,False); self.configure(bg=WHITE)
+        p = pasajero; ruta = datos.ruta_por_id(p["ruta_id"])
+        # Encabezado
+        tk.Label(self,text="BUS SYSTEM PRO",font=("Segoe UI",16,"bold"),bg=WHITE,fg="#1a1f2e").pack(pady=(20,2))
+        tk.Label(self,text="BOLETA DE PASAJE",font=("Segoe UI",11),bg=WHITE,fg="#555").pack()
+        tk.Frame(self,bg="#ccc",height=1).pack(fill="x",padx=30,pady=10)
+        # Numero de boleta
+        tk.Label(self,text=f"N° Boleta: BSP-{p['id']:05d}",font=("Segoe UI",10,"bold"),bg=WHITE).pack()
+        tk.Label(self,text=datetime.datetime.now().strftime("Emitida: %d/%m/%Y %H:%M"),
+                 font=("Segoe UI",9),bg=WHITE,fg="#777").pack(pady=(0,10))
+        tk.Frame(self,bg="#ccc",height=1).pack(fill="x",padx=30,pady=(0,10))
+        # Datos del pasajero
+        frame=tk.Frame(self,bg=WHITE); frame.pack(padx=30,fill="x")
+        campos = [
+            ("Pasajero",   p["nombre"]),
+            ("DNI",        p["dni"]),
+            ("Telefono",   p.get("telefono","—")),
+            ("Origen",     ruta["origen"] if ruta else "Lima"),
+            ("Destino",    p["destino"]),
+            ("Fecha",      p["fecha"]),
+            ("Hora salida",ruta["hora"] if ruta else "—"),
+            ("Asiento N°", str(p["asiento"])),
+        ]
+        for lbl,val in campos:
+            fila=tk.Frame(frame,bg=WHITE); fila.pack(fill="x",pady=3)
+            tk.Label(fila,text=lbl+":",font=("Segoe UI",9,"bold"),bg=WHITE,
+                     fg="#555",width=14,anchor="w").pack(side="left")
+            tk.Label(fila,text=val,font=("Segoe UI",10),bg=WHITE,anchor="w").pack(side="left")
+        tk.Frame(self,bg="#ccc",height=1).pack(fill="x",padx=30,pady=15)
+        # Total
+        tk.Label(self,text=f"TOTAL:   S/ {p['precio']:.2f}",
+                 font=("Segoe UI",14,"bold"),bg=WHITE,fg="#1a1f2e").pack()
+        tk.Frame(self,bg="#ccc",height=1).pack(fill="x",padx=30,pady=15)
+        tk.Label(self,text="Gracias por viajar con nosotros",
+                 font=("Segoe UI",9,"italic"),bg=WHITE,fg="#888").pack()
+        tk.Button(self,text="Cerrar",bg="#1a1f2e",fg=WHITE,bd=0,
+                  font=("Segoe UI",10,"bold"),pady=8,cursor="hand2",
+                  command=self.destroy).pack(pady=15,padx=60,fill="x")
+
+# ─── Formulario pasajero (compartido entre venta y modificacion) ───────────────
+class FormularioPasajero(tk.Frame):
+    """Formulario reutilizable con validaciones."""
+    def __init__(self, parent, bg=CARD):
+        super().__init__(parent, bg=bg)
+        self.v_nombre=tk.StringVar(); self.v_dni=tk.StringVar()
+        self.v_telefono=tk.StringVar(); self.v_ruta=tk.StringVar()
+        # Nombre
+        tk.Label(self,text="Nombre completo",bg=bg,fg=SUBTEXT,font=("Segoe UI",9,"bold")).pack(anchor="w",pady=(6,1))
+        e_nombre=ttk.Entry(self,textvariable=self.v_nombre,font=("Segoe UI",10),width=28)
+        e_nombre.pack(anchor="w"); _registrar_validaciones(e_nombre,"letra",60)
+        # DNI (8 digitos)
+        tk.Label(self,text="DNI (8 digitos)",bg=bg,fg=SUBTEXT,font=("Segoe UI",9,"bold")).pack(anchor="w",pady=(6,1))
+        e_dni=ttk.Entry(self,textvariable=self.v_dni,font=("Segoe UI",10),width=28)
+        e_dni.pack(anchor="w"); _registrar_validaciones(e_dni,"num",8)
+        # Telefono (9 digitos)
+        tk.Label(self,text="Telefono (9 digitos)",bg=bg,fg=SUBTEXT,font=("Segoe UI",9,"bold")).pack(anchor="w",pady=(6,1))
+        e_tel=ttk.Entry(self,textvariable=self.v_telefono,font=("Segoe UI",10),width=28)
+        e_tel.pack(anchor="w"); _registrar_validaciones(e_tel,"num",9)
+        # Fecha
+        tk.Label(self,text="Fecha de viaje",bg=bg,fg=SUBTEXT,font=("Segoe UI",9,"bold")).pack(anchor="w",pady=(6,1))
+        self.dp=DatePicker(self,bg=bg); self.dp.pack(anchor="w")
+        # Ruta
+        tk.Label(self,text="Ruta:",bg=bg,fg=SUBTEXT,font=("Segoe UI",9,"bold")).pack(anchor="w",pady=(6,1))
+        self.combo=ttk.Combobox(self,textvariable=self.v_ruta,state="readonly",width=30)
+        self._actualizar_rutas(); self.combo.pack(anchor="w")
+    def _actualizar_rutas(self):
+        opts=[f"{r['id']} - Lima->{r['destino']} {r['hora']} S/{r['precio']}" for r in datos.RUTAS]
+        self.combo["values"]=opts
+        if opts: self.combo.current(0)
+    def ruta_actual(self): return datos.RUTAS[self.combo.current()]
+    def validar(self):
+        if not self.v_nombre.get().strip():
+            messagebox.showwarning("Aviso","Ingresa el nombre completo"); return False
+        if len(self.v_dni.get()) != 8:
+            messagebox.showwarning("Aviso","El DNI debe tener exactamente 8 digitos"); return False
+        if self.v_telefono.get() and len(self.v_telefono.get()) not in (0,9):
+            messagebox.showwarning("Aviso","El telefono debe tener 9 digitos"); return False
+        return True
+
+# ─── Vender Pasaje ────────────────────────────────────────────────────────────
+class VistaVenta(tk.Frame):
+    def __init__(self,parent,usuario):
+        super().__init__(parent,bg=BG); self.asiento_sel=None; self.botones_asiento={}
+        tk.Label(self,text="Vender Pasaje",font=("Segoe UI",15,"bold"),bg=BG,fg=TEXT).pack(pady=12)
+        panes=tk.Frame(self,bg=BG); panes.pack(fill="both",expand=True,padx=20)
+        # Formulario izquierdo
+        izq=tk.Frame(panes,bg=CARD,padx=12,pady=12); izq.pack(side="left",fill="y",padx=(0,12))
+        self.form=FormularioPasajero(izq,bg=CARD); self.form.pack(fill="x")
+        self.form.combo.bind("<<ComboboxSelected>>",lambda e:self._mapa())
+        self.lbl_asiento=tk.Label(izq,text="Asiento: —",bg=CARD,fg=TEXT,font=("Segoe UI",10,"bold"))
+        self.lbl_asiento.pack(pady=8)
+        tk.Button(izq,text="Confirmar venta",bg=SUCCESS,fg=WHITE,bd=0,
+                  font=("Segoe UI",10,"bold"),pady=8,cursor="hand2",command=self._vender).pack(fill="x")
+        # Mapa derecho
+        der=tk.Frame(panes,bg=CARD,padx=10,pady=10); der.pack(side="left",fill="both",expand=True)
+        tk.Label(der,text="Mapa de Asientos",bg=CARD,fg=TEXT,font=("Segoe UI",11,"bold")).pack(pady=(0,6))
+        ley=tk.Frame(der,bg=CARD); ley.pack()
+        for color,txt in [(SUCCESS,"Libre"),(ACCENT,"Seleccionado"),(DANGER,"Ocupado")]:
+            tk.Frame(ley,bg=color,width=14,height=14).pack(side="left",padx=(8,2))
+            tk.Label(ley,text=txt,bg=CARD,fg=TEXT,font=("Segoe UI",8)).pack(side="left",padx=(0,8))
+        self.frame_mapa=tk.Frame(der,bg=CARD); self.frame_mapa.pack(pady=8)
+        self._mapa()
+    def _mapa(self):
+        for w in self.frame_mapa.winfo_children(): w.destroy()
+        self.asiento_sel=None; self.lbl_asiento.config(text="Asiento: —"); self.botones_asiento={}
+        ruta=self.form.ruta_actual(); ocup=datos.asientos_ocupados(ruta["id"]); total=ruta["asientos"]; filas=(total+3)//4
+        cab=tk.Frame(self.frame_mapa,bg=CARD); cab.pack(fill="x",pady=(0,4))
+        tk.Label(cab,text="Conductor",bg=BORDER,fg=TEXT,font=("Segoe UI",8),
+                 padx=8,pady=3).pack(side="right",padx=4)
+        for fila in range(filas):
+            row=tk.Frame(self.frame_mapa,bg=CARD); row.pack(pady=2)
+            for col in range(4):
+                num=fila*4+col+1
+                if num>total: tk.Frame(row,width=34,height=28,bg=CARD).pack(side="left",padx=2); continue
+                if col==2: tk.Frame(row,width=20,bg=CARD).pack(side="left")
+                lib=num not in ocup
+                b=tk.Button(row,text=str(num),width=3,height=1,
+                            bg=SUCCESS if lib else DANGER,fg=WHITE,bd=0,
+                            font=("Segoe UI",8,"bold"),
+                            state="normal" if lib else "disabled",
+                            cursor="hand2" if lib else "arrow",
+                            command=lambda n=num:self._sel(n))
+                b.pack(side="left",padx=2); self.botones_asiento[num]=b
+    def _sel(self,n):
+        ocup=datos.asientos_ocupados(self.form.ruta_actual()["id"])
+        if self.asiento_sel and self.asiento_sel not in ocup:
+            self.botones_asiento[self.asiento_sel].config(bg=SUCCESS)
+        self.asiento_sel=n; self.botones_asiento[n].config(bg=ACCENT)
+        self.lbl_asiento.config(text=f"Asiento: {n}")
+    def _vender(self):
+        if not self.form.validar(): return
+        if not self.asiento_sel:
+            messagebox.showwarning("Aviso","Selecciona un asiento en el mapa"); return
+        ruta=self.form.ruta_actual()
+        try:
+            p=datos.agregar_pasajero(self.form.v_nombre.get().strip(),
+                                     self.form.v_dni.get(),
+                                     self.form.v_telefono.get(),
+                                     ruta["id"],self.asiento_sel,self.form.dp.get())
+            VentanaBoleta(self, p)
+            self.form.v_nombre.set(""); self.form.v_dni.set(""); self.form.v_telefono.set("")
+            self._mapa()
+        except ValueError as e: messagebox.showerror("Error",str(e))
+
+# ─── Dialogo Ordenar ──────────────────────────────────────────────────────────
+class DialogoOrdenar(tk.Toplevel):
+    def __init__(self, parent, callback):
+        super().__init__(parent); self.title("Ordenar Pasajeros")
+        self.geometry("360x420"); self.resizable(False,False); self.configure(bg=BG)
+        self.grab_set(); self.callback=callback
+        tk.Label(self,text="Ordenar por:",font=("Segoe UI",12,"bold"),bg=BG,fg=TEXT).pack(pady=(20,10))
+        self.var=tk.StringVar(value=list(OPCIONES_ORDEN.keys())[0])
+        self.lbl_algo=tk.Label(self,text="",bg=BG,fg=ACCENT,font=("Segoe UI",9,"italic"))
+        self.lbl_algo.pack(pady=(0,8))
+        for desc in OPCIONES_ORDEN:
+            tk.Radiobutton(self,text=desc,variable=self.var,value=desc,
+                           bg=BG,fg=TEXT,selectcolor=CARD,activebackground=BG,
+                           font=("Segoe UI",10),anchor="w",
+                           command=self._actualizar_info).pack(fill="x",padx=30,pady=3)
+        self._actualizar_info()
+        tk.Button(self,text="Ordenar",bg=ACCENT,fg=WHITE,bd=0,
+                  font=("Segoe UI",11,"bold"),pady=8,cursor="hand2",
+                  command=self._ok).pack(fill="x",padx=40,pady=15)
+    def _actualizar_info(self):
+        _,_,nombre_algo=OPCIONES_ORDEN[self.var.get()]
+        complejidad="O(n2)" if nombre_algo in ("Burbuja","Seleccion","Insercion") else "O(n log n)"
+        self.lbl_algo.config(text=f"Algoritmo: {nombre_algo}  ({complejidad})")
+    def _ok(self):
+        clave_dict,fn,nombre_algo=OPCIONES_ORDEN[self.var.get()]
+        datos.registrar_uso_metodo(nombre_algo)
+        self.callback(clave_dict,fn); self.destroy()
+
+
+class VistaPasajeros(tk.Frame):
+    def __init__(self,parent,usuario):
+        super().__init__(parent,bg=BG)
+        tk.Label(self,text="Lista de Pasajeros",font=("Segoe UI",15,"bold"),bg=BG,fg=TEXT).pack(pady=12)
+        tk.Label(self,text="(En desarrollo...)",bg=BG,fg=SUBTEXT,font=("Segoe UI",10)).pack()
+
+class VistaRutas(tk.Frame):
+    def __init__(self,parent,usuario):
+        super().__init__(parent,bg=BG)
+        tk.Label(self,text="Rutas",font=("Segoe UI",15,"bold"),bg=BG,fg=TEXT).pack(pady=12)
+        tk.Label(self,text="(En desarrollo...)",bg=BG,fg=SUBTEXT,font=("Segoe UI",10)).pack()
+
+class VistaReporte(tk.Frame):
+    def __init__(self,parent,usuario):
+        super().__init__(parent,bg=BG)
+        tk.Label(self,text="Reportes",font=("Segoe UI",15,"bold"),bg=BG,fg=TEXT).pack(pady=12)
+        tk.Label(self,text="(En desarrollo...)",bg=BG,fg=SUBTEXT,font=("Segoe UI",10)).pack()
+
 if __name__ == "__main__":
     VentanaLogin().mainloop()
